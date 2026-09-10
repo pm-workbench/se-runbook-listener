@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from 'node:fs'
+import http from 'node:http'
+import https from 'node:https'
 import express, { type NextFunction, type Request, type Response } from 'express'
 import { pool } from './db.js'
 import { isManagerEmail } from './managerAllowlist.js'
@@ -113,4 +116,23 @@ app.get('/progress/:tenantId/:userId', async (req, res) => {
 })
 
 const port = Number(process.env.PORT ?? 8080)
-app.listen(port, () => console.log(`se-runbook-listener listening on :${port}`))
+
+// The Dockerfile bakes a self-signed cert into the image at /app/certs (see
+// its CERT_SAN_IP build arg) so the app's origin talks HTTPS-to-HTTPS
+// instead of tripping browser mixed-content blocking. No cert files present
+// (e.g. running via `npm run dev` / docker-compose for local dev) → plain
+// HTTP, same as before. Self-signed means every browser/device that hits
+// this still has to visit https://<host>:<port>/health once and click
+// through the "not secure" warning before fetches from elsewhere will
+// succeed — that's inherent to not paying for a cert, not something the
+// code here can route around.
+const certPath = process.env.TLS_CERT_PATH ?? '/app/certs/cert.pem'
+const keyPath = process.env.TLS_KEY_PATH ?? '/app/certs/key.pem'
+
+if (existsSync(certPath) && existsSync(keyPath)) {
+  https
+    .createServer({ cert: readFileSync(certPath), key: readFileSync(keyPath) }, app)
+    .listen(port, () => console.log(`se-runbook-listener (https, self-signed) listening on :${port}`))
+} else {
+  http.createServer(app).listen(port, () => console.log(`se-runbook-listener (http) listening on :${port}`))
+}

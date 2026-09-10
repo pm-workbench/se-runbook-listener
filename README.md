@@ -13,6 +13,31 @@ any of it, accepted because nothing here is sensitive (progress + doc links).
 - `GET /users?tenantId=` — roster (**manager-only**, see below).
 - `GET /users/:tenantId/:userId/progress` — one user's detail (**manager-only**).
 
+## HTTPS (self-signed)
+
+The image bakes in a self-signed cert at build time (`CERT_SAN_IP` build
+arg, defaults to `192.168.86.205` — see `portainer-stack.yml`), and
+`src/server.ts` serves HTTPS whenever it finds one at `/app/certs`. This
+exists because a page served over HTTPS (the published app, most likely)
+can't call a plain HTTP API without the browser silently blocking it as
+mixed content — self-signed HTTPS fixes that specific problem.
+
+It does **not** make the connection "trusted" the way a real cert does.
+Browsers reject unknown certs by default, so **every browser/device that
+will use the app has to do this once**:
+
+1. Visit `https://<host>:<port>/health` directly in that browser.
+2. Click through the warning (Chrome: **Advanced → Proceed to \<host\> (unsafe)**; Firefox: **Advanced → Accept the Risk and Continue**).
+3. That's it — that browser now trusts this cert for this host:port, and the app's own fetch calls to it will succeed from then on.
+
+Skip that step and the app's connection-status dot just shows "not
+connected" — same failure mode as an unreachable address, silent, nothing
+crashes, but nothing syncs either.
+
+If the service ever moves to a different host/IP, the cert has to be
+rebuilt (`CERT_SAN_IP` is baked in, not read at runtime) and everyone
+re-does the click-through for the new address.
+
 ## Manager access
 
 `GET /users` and `GET /users/:tenantId/:userId/progress` require an
@@ -31,6 +56,8 @@ docker compose up --build
 
 API on `http://localhost:8080`, throwaway Postgres alongside it. First
 start runs `schema.sql` automatically (idempotent — fine on every restart).
+No cert is baked in for this path, so it's always plain HTTP — fine, it's
+only ever hit from `localhost` here.
 
 ## Deploying to your real Postgres via Portainer
 
@@ -44,12 +71,18 @@ whatever `DATABASE_URL` you give it:
    - `DATABASE_URL` — `postgres://<user>:<password>@<host>:<port>/<db>` for your existing Postgres
    - `MANAGER_EMAILS` — comma-separated list of manager emails
    - `CORS_ORIGIN` — leave unset for now (defaults to `*`); tighten to the app's real published origin once known
+   - `CERT_SAN_IP` — only if the service's address isn't `192.168.86.205` (the current default)
 3. **Deploy the stack.** First boot runs the migration (`schema.sql`) against
-   that database automatically, then starts serving.
+   that database automatically, then starts serving over HTTPS (self-signed — see above).
 
 If Postgres isn't reachable by container name (not on the same Docker
 network as this stack), use the host machine's address + Postgres's
 published port in `DATABASE_URL` instead.
+
+**Redeploying after a Dockerfile/build-arg change:** Portainer doesn't
+always rebuild automatically on "Update the stack" — look for a "Re-pull
+image and rebuild" / "Force rebuild" option, or it may just reuse the old
+image.
 
 ## What's not done yet
 

@@ -7,7 +7,13 @@
 # without touching this file.
 services:
   listener:
-    build: .
+    build:
+      context: .
+      args:
+        # Must match the address this service is actually reached at — the
+        # self-signed cert's SAN is baked in at build time (see Dockerfile).
+        # Changing this requires a rebuild, not just a redeploy.
+        CERT_SAN_IP: ${CERT_SAN_IP:-192.168.86.205}
     environment:
       DATABASE_URL: ${DATABASE_URL}
       MANAGER_EMAILS: ${MANAGER_EMAILS}
