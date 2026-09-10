@@ -1,0 +1,18 @@
+# Real-deployment stack for Portainer (Stacks → Add stack → Repository,
+# compose path: portainer-stack.yml). Points at your existing Postgres
+# instead of spinning up a throwaway one — see README.md.
+#
+# Fill in DATABASE_URL and MANAGER_EMAILS as Portainer stack environment
+# variables (not hardcoded here), so you can edit MANAGER_EMAILS later
+# without touching this file.
+services:
+  listener:
+    build: .
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      MANAGER_EMAILS: ${MANAGER_EMAILS}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      PORT: '8080'
+    ports:
+      - '8080:8080'
+    restart: unless-stopped

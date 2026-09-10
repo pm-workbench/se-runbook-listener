@@ -1,0 +1,30 @@
+# Local dev / smoke-testing only — spins up its own throwaway Postgres.
+# For real deployment against the existing Portainer-managed Postgres, see
+# README.md: you don't use this file there, just the Dockerfile + your own
+# DATABASE_URL pointed at that container.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: se_runbook
+      POSTGRES_PASSWORD: dev_only_password
+      POSTGRES_DB: se_runbook
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  listener:
+    build: .
+    environment:
+      DATABASE_URL: postgres://se_runbook:dev_only_password@postgres:5432/se_runbook
+      MANAGER_EMAILS: you@example.com
+      CORS_ORIGIN: '*'
+      PORT: '8080'
+    ports:
+      - '8080:8080'
+    depends_on:
+      - postgres
+
+volumes:
+  pgdata:
